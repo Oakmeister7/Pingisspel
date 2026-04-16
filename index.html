@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<title>Pingis PRO</title>
+<style>
+body { margin:0; overflow:hidden; }
+#score {
+  position:absolute;
+  top:10px;
+  width:100%;
+  text-align:center;
+  font-size:24px;
+  color:white;
+}
+</style>
+</head>
+<body>
+
+<div id="score">0 - 0</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+
+<script>
+let scene, camera, renderer;
+let player, enemy, ball, net;
+
+let ballVel = {x:0.1, y:0.2, z:0.2};
+let spin = {x:0, y:0};
+
+let playerScore = 0;
+let enemyScore = 0;
+
+let servePhase = true;
+let bounceCount = 0;
+
+function init(){
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const light = new THREE.DirectionalLight(0xffffff,1);
+  light.position.set(5,10,5);
+  scene.add(light);
+
+  const table = new THREE.Mesh(
+    new THREE.BoxGeometry(10,0.5,6),
+    new THREE.MeshPhongMaterial({color:0x0a7d2c})
+  );
+  scene.add(table);
+
+  net = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1,1,6),
+    new THREE.MeshPhongMaterial({color:0xffffff})
+  );
+  net.position.y = 0.75;
+  scene.add(net);
+
+  function racket(color){
+    return new THREE.Mesh(
+      new THREE.BoxGeometry(1,0.5,0.3),
+      new THREE.MeshPhongMaterial({color})
+    );
+  }
+
+  player = racket(0x0000ff);
+  player.position.set(0,0.5,2.5);
+  scene.add(player);
+
+  enemy = racket(0xff0000);
+  enemy.position.set(0,0.5,-2.5);
+  scene.add(enemy);
+
+  ball = new THREE.Mesh(
+    new THREE.SphereGeometry(0.2,32,32),
+    new THREE.MeshPhongMaterial({color:0xffffff})
+  );
+  ball.position.y = 1;
+  scene.add(ball);
+
+  document.addEventListener("mousemove", e=>{
+    let x = (e.clientX / window.innerWidth) * 10 - 5;
+    player.position.x = x;
+  });
+
+  document.addEventListener("click", smash);
+}
+
+function smash(){
+  // smash = hårt nedåt + framåt
+  ballVel.y = 0.4;
+  ballVel.z *= -1.5;
+}
+
+function resetBall(dir){
+  ball.position.set(0,1,0);
+  ballVel = {x:0, y:0.3, z:dir*0.15};
+  spin = {x:0, y:0};
+  servePhase = true;
+  bounceCount = 0;
+}
+
+function updateScore(){
+  document.getElementById("score").innerText = playerScore+" - "+enemyScore;
+}
+
+// Magnus-effekt (spin påverkar bana)
+function applySpin(){
+  ballVel.x += spin.y * 0.005;
+  ballVel.z += spin.x * 0.005;
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  // kamera bakom spelaren
+  camera.position.set(player.position.x, 5, 8);
+  camera.lookAt(0,0,0);
+
+  // gravity
+  ballVel.y -= 0.01;
+
+  applySpin();
+
+  ball.position.x += ballVel.x;
+  ball.position.y += ballVel.y;
+  ball.position.z += ballVel.z;
+
+  // studs bord
+  if(ball.position.y <= 0.5){
+    ball.position.y = 0.5;
+    ballVel.y *= -0.85;
+    bounceCount++;
+  }
+
+  // serve-regel
+  if(servePhase){
+    if(bounceCount >= 2){
+      servePhase = false;
+    }
+  }
+
+  // nät
+  if(Math.abs(ball.position.z) < 0.1 && ball.position.y < 1.5){
+    ballVel.z *= -0.5;
+  }
+
+  // player hit
+  if(
+    ball.position.z > 2 &&
+    Math.abs(ball.position.x - player.position.x) < 1 &&
+    ball.position.y < 1.5
+  ){
+    ballVel.z *= -1;
+
+    // spin baserat på träff
+    spin.x = (player.position.x - ball.position.x) * 0.5;
+    spin.y = Math.random()*0.2;
+  }
+
+  // AI
+  enemy.position.x += (ball.position.x - enemy.position.x) * 0.08;
+
+  if(
+    ball.position.z < -2 &&
+    Math.abs(ball.position.x - enemy.position.x) < 1 &&
+    ball.position.y < 1.5
+  ){
+    ballVel.z *= -1;
+    spin = {x:0,y:0};
+  }
+
+  // poäng
+  if(ball.position.z > 3){
+    enemyScore++;
+    updateScore();
+    resetBall(-1);
+  }
+
+  if(ball.position.z < -3){
+    playerScore++;
+    updateScore();
+    resetBall(1);
+  }
+
+  renderer.render(scene,camera);
+}
+
+init();
+resetBall(1);
+animate();
+</script>
+
+</body>
+</html>
